@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getEmbedding } from '@/lib/embeddings';
 import { getPineconeIndex } from '@/lib/pinecone';
+// @ts-expect-error: Bypassing missing types for the inner module to avoid index.js bugs in Next.js
 import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 
 export async function POST(req: Request) {

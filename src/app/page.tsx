@@ -14,7 +14,7 @@ export default function Home() {
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!input.trim()) return;
-    sendMessage({ role: 'user', content: input });
+    sendMessage({ role: 'user', parts: [{ type: 'text', text: input }] });
     setInput('');
   };
 

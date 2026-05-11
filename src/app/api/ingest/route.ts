@@ -1,13 +1,43 @@
 import { NextResponse } from 'next/server';
 import { getEmbedding } from '@/lib/embeddings';
 import { getPineconeIndex } from '@/lib/pinecone';
+import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 
 export async function POST(req: Request) {
   try {
-    const { text, docId = 'doc-1' } = await req.json();
+    let text = '';
+    let docId = `doc-${Date.now()}`;
+
+    const contentType = req.headers.get('content-type') || '';
+    
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      const file = formData.get('file') as File | null;
+      
+      if (!file) {
+        return NextResponse.json({ error: 'File is required' }, { status: 400 });
+      }
+      
+      docId = file.name || docId;
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      if (file.type === 'application/pdf') {
+        const pdfData = await pdfParse(buffer);
+        text = pdfData.text;
+      } else {
+        // Assume plain text
+        text = buffer.toString('utf-8');
+      }
+    } else {
+      // Fallback for JSON requests (e.g. from curl tests)
+      const body = await req.json();
+      text = body.text;
+      if (body.docId) docId = body.docId;
+    }
     
     if (!text) {
-      return NextResponse.json({ error: 'Text is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Text content could not be extracted' }, { status: 400 });
     }
 
     // Simplistic chunking: split by paragraphs

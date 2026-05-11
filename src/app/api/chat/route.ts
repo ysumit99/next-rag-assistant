@@ -39,13 +39,19 @@ export async function POST(req: Request) {
 ${contextText ? `Use the following context to answer the user's question. If the answer is not in the context, just say you don't know based on the provided documents.\n\nContext:\n${contextText}` : 'No document context available. Answer based on your general knowledge.'}
 `;
 
+  // Ensure all messages have standard string content instead of experimental parts array
+  const sanitizedMessages = messages.map((m: any) => ({
+    role: m.role,
+    content: typeof m.content === 'string' ? m.content : (m.parts ? m.parts.map((p: any) => p.text).join('') : '')
+  }));
+
   // Call the language model
   const result = streamText({
     model: google('gemini-2.5-flash'),
-    messages,
+    messages: sanitizedMessages,
     system: systemPrompt,
   });
 
   // Respond with the stream
-  return result.toTextStreamResponse();
+  return result.toUIMessageStreamResponse();
 }

@@ -3,6 +3,7 @@
 import { useChat } from '@ai-sdk/react';
 import { Send, Bot, User, Sparkles, Database } from 'lucide-react';
 import { useRef, useEffect, useState } from 'react';
+import DocumentUploader from '@/components/DocumentUploader';
 
 export default function Home() {
   const { messages, sendMessage, status } = useChat();
@@ -13,7 +14,7 @@ export default function Home() {
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!input.trim()) return;
-    sendMessage({ role: 'user', parts: [{ type: 'text', text: input }] });
+    sendMessage({ role: 'user', content: input });
     setInput('');
   };
 
@@ -32,12 +33,15 @@ export default function Home() {
           </div>
           <div>
             <h1 className="font-semibold text-lg tracking-tight">AI Knowledge Base</h1>
-            <p className="text-xs text-neutral-400">Powered by Next.js, Vercel AI SDK & Gemini</p>
+            <p className="text-xs text-neutral-400 hidden sm:block">Powered by Next.js, Vercel AI SDK & Gemini</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-sm text-neutral-400 bg-neutral-900/50 px-3 py-1.5 rounded-full border border-neutral-800">
-          <Database className="w-4 h-4 text-emerald-400" />
-          <span>Pinecone Ready</span>
+        <div className="flex items-center gap-4">
+          <DocumentUploader />
+          <div className="hidden sm:flex items-center gap-2 text-sm text-neutral-400 bg-neutral-900/50 px-3 py-2 rounded-lg border border-neutral-800">
+            <Database className="w-4 h-4 text-emerald-400" />
+            <span>Pinecone</span>
+          </div>
         </div>
       </header>
 
@@ -82,7 +86,7 @@ export default function Home() {
                       : 'bg-neutral-900 border border-neutral-800 text-neutral-200 rounded-tl-sm shadow-sm'
                   }`}
                 >
-                  {m.parts?.map((part, i) => part.type === 'text' ? <span key={i}>{part.text}</span> : null)}
+                  {m.content || (m.parts ? m.parts.map((part: any, i: number) => part.type === 'text' ? <span key={i}>{part.text}</span> : null) : null)}
                 </div>
               </div>
             </div>

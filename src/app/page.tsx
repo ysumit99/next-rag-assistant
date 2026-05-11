@@ -86,7 +86,7 @@ export default function Home() {
                       : 'bg-neutral-900 border border-neutral-800 text-neutral-200 rounded-tl-sm shadow-sm'
                   }`}
                 >
-                  {m.content || (m.parts ? m.parts.map((part: any, i: number) => part.type === 'text' ? <span key={i}>{part.text}</span> : null) : null)}
+                  {m.parts ? m.parts.map((part: any, i: number) => part.type === 'text' ? <span key={i}>{part.text}</span> : null) : null}
                 </div>
               </div>
             </div>

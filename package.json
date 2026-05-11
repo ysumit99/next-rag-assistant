@@ -12,6 +12,8 @@
     "@ai-sdk/google": "^3.0.71",
     "@ai-sdk/react": "^3.0.179",
     "@pinecone-database/pinecone": "^7.2.0",
+    "@upstash/ratelimit": "^2.0.8",
+    "@upstash/redis": "^1.38.0",
     "ai": "^6.0.177",
     "clsx": "^2.1.1",
     "framer-motion": "^12.38.0",

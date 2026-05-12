@@ -1,6 +1,7 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import { Send, Bot, User, Sparkles, Database, FileText } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
 import DocumentUploader from "@/components/DocumentUploader";
@@ -18,19 +19,8 @@ export default function Home() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { messages, sendMessage, status } = useChat({
-    api: "/api/chat",
-    onResponse: (response) => {
-      console.log("onResponse fired", response.headers.get("X-Sources"));
-      const sourcesHeader = response.headers.get("X-Sources");
-      if (sourcesHeader) {
-        try {
-          pendingSourcesRef.current = JSON.parse(sourcesHeader);
-        } catch {
-          pendingSourcesRef.current = [];
-        }
-      }
-    },
-    onFinish: (message) => {
+    transport: new DefaultChatTransport({ api: "/api/chat" }),
+    onFinish: ({ message }) => {
       console.log("onFinish fired", message);
       if (pendingSourcesRef.current.length > 0) {
         setMessageSources((prev) => ({
@@ -64,9 +54,9 @@ export default function Home() {
       pendingSourcesRef.current = [];
     }
 
-    // Send message — after response, map sources to message
-    sendMessage({ role: "user", content: currentInput });
+    sendMessage({ text: currentInput });
   };
+
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -89,7 +79,7 @@ export default function Home() {
       }));
       pendingSourcesRef.current = [];
     }
-  }, [messages, status]);
+  }, [messages, status, messageSources]);
 
   return (
     <div className="flex h-screen w-full flex-col bg-neutral-950 text-neutral-50 font-sans selection:bg-indigo-500/30">
@@ -165,13 +155,11 @@ export default function Home() {
                       : "bg-neutral-900 border border-neutral-800 text-neutral-200 rounded-tl-sm shadow-sm"
                       }`}
                   >
-                    {typeof m.content === "string"
-                      ? m.content
-                      : (m as any).parts?.map((part: any, i: number) =>
-                        part.type === "text" ? (
-                          <span key={i}>{part.text}</span>
-                        ) : null
-                      )}
+                    {(m as any).parts?.map((part: any, i: number) =>
+                      part.type === "text" ? (
+                        <span key={i}>{part.text}</span>
+                      ) : null
+                    )}
                   </div>
 
                   {/* Source Citations — only for assistant messages */}

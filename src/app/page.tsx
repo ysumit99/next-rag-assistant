@@ -133,7 +133,16 @@ export default function Home() {
             </p>
           </div>
         ) : (
-          messages.map((m) => (
+           messages.map((m) => {
+            if (m.role === "assistant") {
+              console.log("[citations] render", {
+                mId: m.id,
+                hasEntry: !!messageSources[m.id],
+                entryLen: messageSources[m.id]?.length,
+                keys: Object.keys(messageSources),
+              });
+            }
+            return (
             <div
               key={m.id}
               className={`flex w-full ${m.role === "user" ? "justify-end" : "justify-start"
@@ -215,7 +224,8 @@ export default function Home() {
                 </div>
               </div>
             </div>
-          ))
+            );
+          })
         )}
 
         {/* Loading indicator */}

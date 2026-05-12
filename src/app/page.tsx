@@ -48,11 +48,15 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query: currentInput }),
       });
-      const { sources } = await res.json();
-      pendingSourcesRef.current = sources;
-    } catch {
+      console.log("[citations] /api/sources status:", res.status);
+      const data = await res.json();
+      console.log("[citations] /api/sources body:", data);
+      pendingSourcesRef.current = data.sources ?? [];
+    } catch (err) {
+      console.log("[citations] /api/sources failed:", err);
       pendingSourcesRef.current = [];
     }
+    console.log("[citations] pending after fetch:", pendingSourcesRef.current.length);
 
     sendMessage({ text: currentInput });
   };
@@ -68,6 +72,12 @@ export default function Home() {
     if (assistantMessages.length === 0) return;
 
     const lastAssistant = assistantMessages[assistantMessages.length - 1];
+      console.log("[citations] effect tick", {
+      status,
+      lastAssistantId: lastAssistant.id,
+      pendingCount: pendingSourcesRef.current.length,
+      alreadyMapped: !!messageSources[lastAssistant.id],
+    });
     if (
       pendingSourcesRef.current.length > 0 &&
       !messageSources[lastAssistant.id] &&

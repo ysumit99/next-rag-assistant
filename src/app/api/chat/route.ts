@@ -5,7 +5,7 @@ import { getPineconeIndex } from "@/lib/pinecone";
 import { isMockMode, MOCK_CHAT_RESPONSE, MOCK_SOURCES } from "@/lib/mockData";
 import { chatRatelimit, getIP, rateLimitResponse } from "@/lib/ratelimit";
 import { simulateReadableStream } from "ai";
-import { MockLanguageModelV2 } from "ai/test";
+import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
 
 export const maxDuration = 30;
 
@@ -25,22 +25,22 @@ export async function POST(req: Request) {
 
   // ── Mock mode bypass ───────────────────────────────────────────
   if (isMockMode()) {
-  const result = streamText({
-    model: new MockLanguageModelV2({
-      doStream: async () => ({
-        stream: simulateReadableStream({
-          chunks: MOCK_CHAT_RESPONSE.split(" ").map((w) => ({
-            type: "text-delta", id: "1", delta: w + " ",
-          })).concat([{ type: "finish", finishReason: "stop", usage: { inputTokens: 0, outputTokens: 0 } }]),
-        }),
-      }),
-    }),
-    messages: [],
-  });
-  return result.toUIMessageStreamResponse({
-    headers: { "X-Sources": JSON.stringify(MOCK_SOURCES) },
-  });
-}
+    const stream = createUIMessageStream({
+      execute: async ({ writer }) => {
+        const id = "txt-1";
+        writer.write({ type: "text-start", id });
+        for (const word of MOCK_CHAT_RESPONSE.split(" ")) {
+          writer.write({ type: "text-delta", id, delta: word + " " });
+        }
+        writer.write({ type: "text-end", id });
+      },
+    });
+
+    return createUIMessageStreamResponse({
+      stream,
+      headers: { "X-Sources": JSON.stringify(MOCK_SOURCES) },
+    });
+  }
   // ── Real RAG pipeline ──────────────────────────────────────────
   const { messages } = await req.json();
 

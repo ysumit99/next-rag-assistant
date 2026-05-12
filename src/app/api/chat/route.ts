@@ -2,14 +2,19 @@ import { streamText } from "ai";
 import { google } from "@ai-sdk/google";
 import { getEmbedding } from "@/lib/embeddings";
 import { getPineconeIndex } from "@/lib/pinecone";
-import { isMockMode, MOCK_CHAT_RESPONSE } from "@/lib/mockData";
+import { isMockMode, MOCK_CHAT_RESPONSE, MOCK_SOURCES } from "@/lib/mockData";
 import { chatRatelimit, getIP, rateLimitResponse } from "@/lib/ratelimit";
 
 export const maxDuration = 30;
 
+export interface Source {
+  docId: string;
+  text: string;
+  score: number;
+}
+
 export async function POST(req: Request) {
   // ── Rate limiting ──────────────────────────────────────────────
-  // Skip rate limiting in development to avoid Upstash calls during local dev
   if (process.env.NODE_ENV === "production") {
     const ip = getIP(req);
     const { success, remaining } = await chatRatelimit.limit(ip);
@@ -17,26 +22,25 @@ export async function POST(req: Request) {
   }
 
   // ── Mock mode bypass ───────────────────────────────────────────
-  // Set USE_MOCK=true in .env.local to skip all API calls during UI development
   if (isMockMode()) {
     const encoder = new TextEncoder();
-    const stream = new ReadableStream({
-      async start(controller) {
-        // Stream mock response word by word for realistic feel
-        const words = MOCK_CHAT_RESPONSE.split(" ");
-        for (const word of words) {
-          controller.enqueue(encoder.encode(`0:"${word} "\n`));
-          await new Promise((r) => setTimeout(r, 30));
-        }
-        controller.enqueue(encoder.encode('d:{"finishReason":"stop"}\n'));
-        controller.close();
-      },
-    });
+    const words = MOCK_CHAT_RESPONSE.split(" ");
 
-    return new Response(stream, {
+    let body = "";
+    for (const word of words) {
+      const escaped = (word + " ")
+        .replace(/\\/g, "\\\\")
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, "\\n");
+      body += `0:"${escaped}"\n`;
+    }
+    body += `d:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0}}\n`;
+
+    return new Response(encoder.encode(body), {
       headers: {
-        "Content-Type": "text/event-stream",
-        "X-Mock-Mode": "true",
+        "Content-Type": "text/plain; charset=utf-8",
+        "X-Vercel-AI-Data-Stream": "v1",
+        "X-Sources": JSON.stringify(MOCK_SOURCES),
       },
     });
   }
@@ -56,6 +60,7 @@ export async function POST(req: Request) {
 
   const lastMessage = sanitizedMessages[sanitizedMessages.length - 1];
   let contextText = "";
+  let sources: Source[] = [];
 
   try {
     if (
@@ -71,11 +76,16 @@ export async function POST(req: Request) {
         includeMetadata: true,
       });
 
-      contextText = queryResponse.matches
-        .filter((match) => (match.score ?? 0) > 0.7) // only high-confidence matches
-        .map((match) => match.metadata?.text)
-        .filter(Boolean)
-        .join("\n\n");
+      // Collect sources with metadata
+      sources = queryResponse.matches
+        .filter((match) => (match.score ?? 0) > 0.7)
+        .map((match) => ({
+          docId: (match.metadata?.docId as string) || "Unknown",
+          text: (match.metadata?.text as string) || "",
+          score: match.score ?? 0,
+        }));
+
+      contextText = sources.map((s) => s.text).join("\n\n");
     }
   } catch (error) {
     console.error("Error fetching context from Pinecone:", error);
@@ -94,5 +104,9 @@ ${contextText
     system: systemPrompt,
   });
 
-  return result.toUIMessageStreamResponse();
+  return result.toDataStreamResponse({
+    headers: sources.length > 0
+      ? { "X-Sources": JSON.stringify(sources) }
+      : {},
+  });
 }

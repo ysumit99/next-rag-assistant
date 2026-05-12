@@ -1,6 +1,30 @@
 // Mock data for development — avoids burning API quota during UI work
 // Enable by setting USE_MOCK=true in .env.local
 
+export interface Source {
+  docId: string;
+  text: string;
+  score: number;
+}
+
+export const MOCK_SOURCES: Source[] = [
+  {
+    docId: "sample-document.pdf",
+    text: "This is a sample chunk from your document. It contains relevant information about the topic you asked about.",
+    score: 0.95,
+  },
+  {
+    docId: "sample-document.pdf",
+    text: "Another relevant passage extracted from the document during semantic search.",
+    score: 0.87,
+  },
+  {
+    docId: "annual-report.pdf",
+    text: "A third chunk from a different document showing multi-document support.",
+    score: 0.81,
+  },
+];
+
 export const MOCK_CHAT_RESPONSE =
   "This is a **mock response** for development. The RAG pipeline is disabled to conserve API quota.\n\n" +
   "In production, I would:\n" +

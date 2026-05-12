@@ -4,8 +4,8 @@ import { getEmbedding } from "@/lib/embeddings";
 import { getPineconeIndex } from "@/lib/pinecone";
 import { isMockMode, MOCK_CHAT_RESPONSE, MOCK_SOURCES } from "@/lib/mockData";
 import { chatRatelimit, getIP, rateLimitResponse } from "@/lib/ratelimit";
-import { simulateReadableStream } from "ai";
 import { createUIMessageStream, createUIMessageStreamResponse } from "ai";
+import { cacheKey, getCached, setCached } from "@/lib/responseCache";
 
 export const maxDuration = 30;
 
@@ -13,6 +13,24 @@ export interface Source {
   docId: string;
   text: string;
   score: number;
+}
+
+function streamTextAsUIMessage(text: string, sources: Source[]) {
+  const stream = createUIMessageStream({
+    execute: async ({ writer }) => {
+      const id = "txt-1";
+      writer.write({ type: "text-start", id });
+      for (const word of text.split(" ")) {
+        writer.write({ type: "text-delta", id, delta: word + " " });
+      }
+      writer.write({ type: "text-end", id });
+    },
+  });
+
+  return createUIMessageStreamResponse({
+    stream,
+    headers: sources.length > 0 ? { "X-Sources": JSON.stringify(sources) } : {},
+  });
 }
 
 export async function POST(req: Request) {
@@ -25,22 +43,9 @@ export async function POST(req: Request) {
 
   // ── Mock mode bypass ───────────────────────────────────────────
   if (isMockMode()) {
-    const stream = createUIMessageStream({
-      execute: async ({ writer }) => {
-        const id = "txt-1";
-        writer.write({ type: "text-start", id });
-        for (const word of MOCK_CHAT_RESPONSE.split(" ")) {
-          writer.write({ type: "text-delta", id, delta: word + " " });
-        }
-        writer.write({ type: "text-end", id });
-      },
-    });
-
-    return createUIMessageStreamResponse({
-      stream,
-      headers: { "X-Sources": JSON.stringify(MOCK_SOURCES) },
-    });
+    return streamTextAsUIMessage(MOCK_CHAT_RESPONSE, MOCK_SOURCES);
   }
+
   // ── Real RAG pipeline ──────────────────────────────────────────
   const { messages } = await req.json();
 
@@ -55,15 +60,28 @@ export async function POST(req: Request) {
   }));
 
   const lastMessage = sanitizedMessages[sanitizedMessages.length - 1];
+  const useCache = process.env.USE_RESPONSE_CACHE === "true";
+  const key = cacheKey(lastMessage.content);
+
+  // ── Cache hit — replay without calling any external API ──────
+  if (useCache) {
+    const hit = getCached(key);
+    if (hit) {
+      return streamTextAsUIMessage(hit.response, hit.sources);
+    }
+  }
+
+  // ── Cache miss — run the real RAG pipeline ───────────────────
   let contextText = "";
   let sources: Source[] = [];
+  let embedding: number[] | undefined;
 
   try {
     if (
       process.env.PINECONE_API_KEY &&
       process.env.GOOGLE_GENERATIVE_AI_API_KEY
     ) {
-      const embedding = await getEmbedding(lastMessage.content);
+      embedding = await getEmbedding(lastMessage.content);
       const index = getPineconeIndex();
 
       const queryResponse = await index.query({
@@ -72,7 +90,6 @@ export async function POST(req: Request) {
         includeMetadata: true,
       });
 
-      // Collect sources with metadata
       sources = queryResponse.matches
         .filter((match) => (match.score ?? 0) > 0.7)
         .map((match) => ({
@@ -98,6 +115,11 @@ ${contextText
     model: google("gemini-2.5-flash"),
     messages: sanitizedMessages,
     system: systemPrompt,
+    onFinish: ({ text }) => {
+      if (useCache) {
+        setCached(key, { response: text, sources, embedding });
+      }
+    },
   });
 
   return result.toUIMessageStreamResponse({

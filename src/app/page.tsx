@@ -1,27 +1,97 @@
 "use client";
 
-import { useChat } from '@ai-sdk/react';
-import { Send, Bot, User, Sparkles, Database } from 'lucide-react';
-import { useRef, useEffect, useState } from 'react';
-import DocumentUploader from '@/components/DocumentUploader';
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
+import { Send, Bot, User, Sparkles, Database, FileText } from "lucide-react";
+import { useRef, useEffect, useState } from "react";
+import DocumentUploader from "@/components/DocumentUploader";
+
+interface Source {
+  docId: string;
+  text: string;
+  score: number;
+}
 
 export default function Home() {
-  const { messages, sendMessage, status } = useChat();
-  const isLoading = status === 'submitted' || status === 'streaming';
-  const [input, setInput] = useState('');
+  const pendingSourcesRef = useRef<Source[]>([]);
+  const [messageSources, setMessageSources] = useState<Record<string, Source[]>>({});
+  const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleSubmit = (e?: React.FormEvent) => {
+  const { messages, sendMessage, status } = useChat({
+    transport: new DefaultChatTransport({ api: "/api/chat" }),
+        onFinish: ({ message }) => {
+      console.log("onFinish fired", message);
+      const sources = pendingSourcesRef.current;
+      if (sources.length > 0) {
+        pendingSourcesRef.current = [];
+        setMessageSources((prev) => ({
+          ...prev,
+          [message.id]: sources,
+        }));
+      }
+    },
+  });
+
+  const isLoading = status === "submitted" || status === "streaming";
+
+  const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!input.trim()) return;
-    sendMessage({ role: 'user', parts: [{ type: 'text', text: input }] });
-    setInput('');
+
+    const currentInput = input;
+    setInput("");
+
+    // Fetch sources in parallel before sending message
+    try {
+      const res = await fetch("/api/sources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: currentInput }),
+      });
+      console.log("[citations] /api/sources status:", res.status);
+      const data = await res.json();
+      console.log("[citations] /api/sources body:", data);
+      pendingSourcesRef.current = data.sources ?? [];
+    } catch (err) {
+      console.log("[citations] /api/sources failed:", err);
+      pendingSourcesRef.current = [];
+    }
+    console.log("[citations] pending after fetch:", pendingSourcesRef.current.length);
+
+    sendMessage({ text: currentInput });
   };
 
   // Auto-scroll to bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Map sources to last assistant message when response completes
+  useEffect(() => {
+    const assistantMessages = messages.filter((m) => m.role === "assistant");
+    if (assistantMessages.length === 0) return;
+
+    const lastAssistant = assistantMessages[assistantMessages.length - 1];
+      console.log("[citations] effect tick", {
+      status,
+      lastAssistantId: lastAssistant.id,
+      pendingCount: pendingSourcesRef.current.length,
+      alreadyMapped: !!messageSources[lastAssistant.id],
+    });
+        if (
+      pendingSourcesRef.current.length > 0 &&
+      !messageSources[lastAssistant.id] &&
+      status === "ready"
+    ) {
+      const sources = pendingSourcesRef.current;
+      pendingSourcesRef.current = [];
+      setMessageSources((prev) => ({
+        ...prev,
+        [lastAssistant.id]: sources,
+      }));
+    }
+  }, [messages, status, messageSources]);
 
   return (
     <div className="flex h-screen w-full flex-col bg-neutral-950 text-neutral-50 font-sans selection:bg-indigo-500/30">
@@ -32,8 +102,12 @@ export default function Home() {
             <Sparkles className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="font-semibold text-lg tracking-tight">AI Knowledge Base</h1>
-            <p className="text-xs text-neutral-400 hidden sm:block">Powered by Next.js, Vercel AI SDK & Gemini</p>
+            <h1 className="font-semibold text-lg tracking-tight">
+              AI Knowledge Base
+            </h1>
+            <p className="text-xs text-neutral-400 hidden sm:block">
+              Powered by Next.js, Vercel AI SDK & Gemini
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -56,42 +130,107 @@ export default function Home() {
               How can I help you today?
             </h2>
             <p className="text-neutral-400 max-w-md">
-              Ask me anything about your documents. I use RAG to fetch the most relevant context and generate accurate answers.
+              Ask me anything about your documents. I use RAG to fetch the most
+              relevant context and generate accurate answers.
             </p>
           </div>
         ) : (
-          messages.map((m) => (
+           messages.map((m) => {
+            if (m.role === "assistant") {
+              console.log("[citations] render", {
+                mId: m.id,
+                hasEntry: !!messageSources[m.id],
+                entryLen: messageSources[m.id]?.length,
+                keys: Object.keys(messageSources),
+              });
+            }
+            return (
             <div
               key={m.id}
-              className={`flex w-full ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex w-full ${m.role === "user" ? "justify-end" : "justify-start"
+                }`}
             >
               <div
-                className={`flex gap-4 max-w-[85%] sm:max-w-[75%] ${
-                  m.role === 'user' ? 'flex-row-reverse' : 'flex-row'
-                }`}
+                className={`flex gap-4 max-w-[85%] sm:max-w-[75%] ${m.role === "user" ? "flex-row-reverse" : "flex-row"
+                  }`}
               >
+                {/* Avatar */}
                 <div
-                  className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1 ${
-                    m.role === 'user'
-                      ? 'bg-neutral-800 border border-neutral-700'
-                      : 'bg-indigo-500/20 border border-indigo-500/30 text-indigo-400'
-                  }`}
+                  className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-1 ${m.role === "user"
+                    ? "bg-neutral-800 border border-neutral-700"
+                    : "bg-indigo-500/20 border border-indigo-500/30 text-indigo-400"
+                    }`}
                 >
-                  {m.role === 'user' ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                  {m.role === "user" ? (
+                    <User className="w-4 h-4" />
+                  ) : (
+                    <Bot className="w-4 h-4" />
+                  )}
                 </div>
-                <div
-                  className={`px-5 py-3.5 rounded-2xl text-sm leading-relaxed ${
-                    m.role === 'user'
-                      ? 'bg-neutral-800 border border-neutral-700 text-neutral-100 rounded-tr-sm'
-                      : 'bg-neutral-900 border border-neutral-800 text-neutral-200 rounded-tl-sm shadow-sm'
-                  }`}
-                >
-                  {m.parts ? m.parts.map((part: any, i: number) => part.type === 'text' ? <span key={i}>{part.text}</span> : null) : null}
+
+                {/* Message bubble + citations */}
+                <div className="flex flex-col gap-2">
+                  <div
+                    className={`px-5 py-3.5 rounded-2xl text-sm leading-relaxed ${m.role === "user"
+                      ? "bg-neutral-800 border border-neutral-700 text-neutral-100 rounded-tr-sm"
+                      : "bg-neutral-900 border border-neutral-800 text-neutral-200 rounded-tl-sm shadow-sm"
+                      }`}
+                  >
+                    {(m as any).parts?.map((part: any, i: number) =>
+                      part.type === "text" ? (
+                        <span key={i}>{part.text}</span>
+                      ) : null
+                    )}
+                  </div>
+
+                  {/* Source Citations — only for assistant messages */}
+                  {m.role === "assistant" &&
+                    messageSources[m.id] &&
+                    messageSources[m.id].length > 0 && (
+                      <div className="flex flex-col gap-1.5 px-1">
+                        <span className="text-xs text-neutral-500 font-medium uppercase tracking-wider">
+                          Sources
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.from(
+                            new Map(
+                              messageSources[m.id].map((s) => [s.docId, s])
+                            ).values()
+                          ).map((source, i) => (
+                            <div key={i} className="relative group">
+                              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-indigo-950/60 border border-indigo-800/40 text-indigo-300 hover:bg-indigo-900/60 hover:border-indigo-700/40 transition-all cursor-default">
+                                <FileText className="w-3 h-3 flex-shrink-0" />
+                                <span className="max-w-[180px] truncate">
+                                  {source.docId}
+                                </span>
+                                <span className="text-indigo-500 text-[10px]">
+                                  {Math.round(source.score * 100)}%
+                                </span>
+                              </div>
+
+                              {/* Tooltip with chunk preview */}
+                              <div className="absolute bottom-full left-0 mb-2 w-72 p-3 bg-neutral-900 border border-neutral-700 rounded-xl text-xs text-neutral-300 leading-relaxed shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                                <div className="font-semibold text-indigo-400 mb-1 truncate">
+                                  {source.docId}
+                                </div>
+                                <div className="text-neutral-400 line-clamp-4">
+                                  {source.text}
+                                </div>
+                                <div className="absolute top-full left-4 w-2 h-2 bg-neutral-900 border-r border-b border-neutral-700 transform rotate-45 -translate-y-1" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                 </div>
               </div>
             </div>
-          ))
+            );
+          })
         )}
+
+        {/* Loading indicator */}
         {isLoading && (
           <div className="flex w-full justify-start animate-pulse">
             <div className="flex gap-4 max-w-[85%]">
@@ -100,9 +239,18 @@ export default function Home() {
               </div>
               <div className="px-5 py-3.5 rounded-2xl bg-neutral-900 border border-neutral-800 rounded-tl-sm">
                 <div className="flex gap-1.5 items-center h-5">
-                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-400/50 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-400/50 animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-400/50 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <div
+                    className="w-1.5 h-1.5 rounded-full bg-indigo-400/50 animate-bounce"
+                    style={{ animationDelay: "0ms" }}
+                  />
+                  <div
+                    className="w-1.5 h-1.5 rounded-full bg-indigo-400/50 animate-bounce"
+                    style={{ animationDelay: "150ms" }}
+                  />
+                  <div
+                    className="w-1.5 h-1.5 rounded-full bg-indigo-400/50 animate-bounce"
+                    style={{ animationDelay: "300ms" }}
+                  />
                 </div>
               </div>
             </div>
@@ -124,11 +272,9 @@ export default function Home() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
+                if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
-                  // Trigger form submission
-                  const form = e.currentTarget.form;
-                  if (form) form.requestSubmit();
+                  handleSubmit();
                 }
               }}
               rows={1}

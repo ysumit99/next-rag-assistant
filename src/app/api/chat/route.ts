@@ -4,6 +4,8 @@ import { getEmbedding } from "@/lib/embeddings";
 import { getPineconeIndex } from "@/lib/pinecone";
 import { isMockMode, MOCK_CHAT_RESPONSE, MOCK_SOURCES } from "@/lib/mockData";
 import { chatRatelimit, getIP, rateLimitResponse } from "@/lib/ratelimit";
+import { simulateReadableStream } from "ai";
+import { MockLanguageModelV2 } from "ai/test";
 
 export const maxDuration = 30;
 
@@ -23,28 +25,22 @@ export async function POST(req: Request) {
 
   // ── Mock mode bypass ───────────────────────────────────────────
   if (isMockMode()) {
-    const encoder = new TextEncoder();
-    const words = MOCK_CHAT_RESPONSE.split(" ");
-
-    let body = "";
-    for (const word of words) {
-      const escaped = (word + " ")
-        .replace(/\\/g, "\\\\")
-        .replace(/"/g, '\\"')
-        .replace(/\n/g, "\\n");
-      body += `0:"${escaped}"\n`;
-    }
-    body += `d:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0}}\n`;
-
-    return new Response(encoder.encode(body), {
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-        "X-Vercel-AI-Data-Stream": "v1",
-        "X-Sources": JSON.stringify(MOCK_SOURCES),
-      },
-    });
-  }
-
+  const result = streamText({
+    model: new MockLanguageModelV2({
+      doStream: async () => ({
+        stream: simulateReadableStream({
+          chunks: MOCK_CHAT_RESPONSE.split(" ").map((w) => ({
+            type: "text-delta", id: "1", delta: w + " ",
+          })).concat([{ type: "finish", finishReason: "stop", usage: { inputTokens: 0, outputTokens: 0 } }]),
+        }),
+      }),
+    }),
+    messages: [],
+  });
+  return result.toUIMessageStreamResponse({
+    headers: { "X-Sources": JSON.stringify(MOCK_SOURCES) },
+  });
+}
   // ── Real RAG pipeline ──────────────────────────────────────────
   const { messages } = await req.json();
 
@@ -104,7 +100,7 @@ ${contextText
     system: systemPrompt,
   });
 
-  return result.toDataStreamResponse({
+  return result.toUIMessageStreamResponse({
     headers: sources.length > 0
       ? { "X-Sources": JSON.stringify(sources) }
       : {},

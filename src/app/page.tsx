@@ -20,14 +20,15 @@ export default function Home() {
 
   const { messages, sendMessage, status } = useChat({
     transport: new DefaultChatTransport({ api: "/api/chat" }),
-    onFinish: ({ message }) => {
+        onFinish: ({ message }) => {
       console.log("onFinish fired", message);
-      if (pendingSourcesRef.current.length > 0) {
+      const sources = pendingSourcesRef.current;
+      if (sources.length > 0) {
+        pendingSourcesRef.current = [];
         setMessageSources((prev) => ({
           ...prev,
-          [message.id]: pendingSourcesRef.current,
+          [message.id]: sources,
         }));
-        pendingSourcesRef.current = [];
       }
     },
   });
@@ -78,16 +79,17 @@ export default function Home() {
       pendingCount: pendingSourcesRef.current.length,
       alreadyMapped: !!messageSources[lastAssistant.id],
     });
-    if (
+        if (
       pendingSourcesRef.current.length > 0 &&
       !messageSources[lastAssistant.id] &&
       status === "ready"
     ) {
+      const sources = pendingSourcesRef.current;
+      pendingSourcesRef.current = [];
       setMessageSources((prev) => ({
         ...prev,
-        [lastAssistant.id]: pendingSourcesRef.current,
+        [lastAssistant.id]: sources,
       }));
-      pendingSourcesRef.current = [];
     }
   }, [messages, status, messageSources]);
 

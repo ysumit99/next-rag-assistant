@@ -19,7 +19,7 @@ export async function POST(req: Request) {
     });
 
     const sources = results.matches
-        .filter((m) => (m.score ?? 0) > 0.7)
+        .filter((m) => (m.score ?? 0) > 0.5)
         .map((m) => ({
             docId: m.metadata?.docId as string,
             text: m.metadata?.text as string,

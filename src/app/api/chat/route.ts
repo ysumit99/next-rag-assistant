@@ -90,6 +90,11 @@ export async function POST(req: Request) {
         includeMetadata: true,
       });
 
+      console.log("[RAG] embedding length:", embedding.length);
+      console.log("[RAG] matches:", queryResponse.matches.length,
+        "scores:", queryResponse.matches.map(m => m.score));
+      console.log("[RAG] sources after 0.7 filter:", sources.length);
+
       sources = queryResponse.matches
         .filter((match) => (match.score ?? 0) > 0.7)
         .map((match) => ({

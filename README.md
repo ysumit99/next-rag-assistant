@@ -27,11 +27,11 @@ Upload PDF documents and chat with an AI that specifically references your docum
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                        RAG Pipeline                          │
+│                        RAG Pipeline                         │
 │                                                             │
 │  PDF Upload → Text Extraction → Chunking → Embedding        │
 │                                                    ↓        │
-│                                           Pinecone Index     │
+│                                           Pinecone Index    │
 │                                                    ↑        │
 │  User Query → Query Embedding → Semantic Search             │
 │                                                    ↓        │
@@ -66,29 +66,31 @@ Documents are split into overlapping chunks to preserve context across boundarie
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology | Why |
-|---|---|---|
-| **Framework** | Next.js 16 (App Router) | Server components, API routes, edge functions |
-| **Language** | TypeScript | Type safety across the full stack |
-| **Styling** | Tailwind CSS | Rapid, consistent UI development |
-| **AI SDK** | Vercel AI SDK v6 | Streaming, provider abstraction |
-| **LLM** | Google Gemini 2.5 Flash | 1M context window, cost efficient |
-| **Embeddings** | gemini-embedding-001 | High quality semantic embeddings |
-| **Vector DB** | Pinecone Serverless | Purpose-built for similarity search |
-| **PDF Parsing** | pdf-parse | Native Node.js text extraction |
-| **Deployment** | Vercel | Zero-config, edge-optimized |
+| Layer           | Technology              | Why                                           |
+| --------------- | ----------------------- | --------------------------------------------- |
+| **Framework**   | Next.js 16 (App Router) | Server components, API routes, edge functions |
+| **Language**    | TypeScript              | Type safety across the full stack             |
+| **Styling**     | Tailwind CSS            | Rapid, consistent UI development              |
+| **AI SDK**      | Vercel AI SDK v6        | Streaming, provider abstraction               |
+| **LLM**         | Google Gemini 2.5 Flash | 1M context window, cost efficient             |
+| **Embeddings**  | gemini-embedding-001    | High quality semantic embeddings              |
+| **Vector DB**   | Pinecone Serverless     | Purpose-built for similarity search           |
+| **PDF Parsing** | pdf-parse               | Native Node.js text extraction                |
+| **Deployment**  | Vercel                  | Zero-config, edge-optimized                   |
 
 ---
 
 ## ⚙️ Local Setup
 
 **1. Clone the repository**
+
 ```bash
 git clone https://github.com/ysumit99/next-rag-assistant.git
 cd next-rag-assistant
 ```
 
 **2. Install dependencies**
+
 ```bash
 npm install
 ```
@@ -96,6 +98,7 @@ npm install
 **3. Configure Environment Variables**
 
 Create a `.env.local` file:
+
 ```env
 GOOGLE_GENERATIVE_AI_API_KEY=your_gemini_api_key
 PINECONE_API_KEY=your_pinecone_api_key
@@ -103,6 +106,7 @@ PINECONE_INDEX=your_pinecone_index_name
 ```
 
 **4. Run the development server**
+
 ```bash
 npm run dev
 ```
@@ -131,4 +135,4 @@ Designed for instant Vercel deployment:
 
 ---
 
-*Built by [Sumit Yadav](https://github.com/ysumit99) · [Blog](https://sumityadav-dev.vercel.app) · [LinkedIn](https://www.linkedin.com/in/sumityadav-dev/)*
+_Built by [Sumit Yadav](https://github.com/ysumit99) · [Blog](https://sumityadav-dev.vercel.app) · [LinkedIn](https://www.linkedin.com/in/sumityadav-dev/)_
